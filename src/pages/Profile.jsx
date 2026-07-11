@@ -1,108 +1,146 @@
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-
-function getStats() {
-  try {
-    const stored = localStorage.getItem('quiz_stats');
-    if (stored) return JSON.parse(stored);
-  } catch { /* ignore */ }
-  return { totalAnswered: 0, correctCount: 0, wrongBook: [] };
-}
+import { supabase } from '../utils/supabase';
+import { getWrongCount } from '../utils/storage';
 
 export default function Profile() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
+  const [stats, setStats] = useState(null);
+  const [exams, setExams] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const stats = getStats();
-  const totalAnswered = stats.totalAnswered || 0;
-  const correctCount = stats.correctCount || 0;
-  const accuracy = totalAnswered > 0 ? Math.round((correctCount / totalAnswered) * 100) : 0;
-  const wrongBookCount = (stats.wrongBook || []).length;
+  useEffect(() => {
+    if (!user) { setLoading(false); return; }
+
+    async function loadData() {
+      try {
+        const { data: userStats } = await supabase
+          .from('user_stats').select('*').eq('user_id', user.id).single();
+        setStats(userStats);
+
+        const { data: examResults } = await supabase
+          .from('exam_results')
+          .select('score,total,percentage,time_used,created_at')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(10);
+        setExams(examResults || []);
+      } catch (e) {
+        console.warn('加载数据失败', e.message);
+      }
+      setLoading(false);
+    }
+    loadData();
+  }, [user]);
+
+  const formatTime = (s) => {
+    const m = Math.floor(s / 60);
+    return `${m}分${s % 60}秒`;
+  };
+
+  const formatDate = (d) => {
+    return new Date(d).toLocaleDateString('zh-CN', {
+      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+    });
+  };
+
+  const wrongCount = getWrongCount();
+
+  if (!user) {
+    return (
+      <div className="profile-page">
+        <button className="btn btn-back" onClick={() => navigate('/')}>← 返回首页</button>
+        <div className="login-prompt">
+          <h2>👤 尚未登录</h2>
+          <p>登录后可查看答题历史和统计数据</p>
+          <button className="btn btn-primary" onClick={() => navigate('/login')}>
+            去登录
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="page-container">
-      <button className="btn btn-back" onClick={() => navigate('/')}>
-        ← 返回首页
-      </button>
+    <div className="profile-page">
+      <button className="btn btn-back" onClick={() => navigate('/')}>← 返回首页</button>
 
-      <div style={{ maxWidth: 600, margin: '40px auto' }}>
-        <h1 style={{ textAlign: 'center', marginBottom: 32 }}>个人中心</h1>
-
-        {user ? (
-          <div className="setup-card" style={{ marginBottom: 24 }}>
-            <div style={{ textAlign: 'center', marginBottom: 16 }}>
-              <div style={{
-                width: 72,
-                height: 72,
-                borderRadius: '50%',
-                background: 'var(--primary)',
-                color: '#fff',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 28,
-                fontWeight: 700,
-                margin: '0 auto 12px',
-              }}>
-                {user.email ? user.email[0].toUpperCase() : 'U'}
-              </div>
-              <p style={{ fontSize: 16, fontWeight: 500, margin: 0, color: 'var(--text)' }}>
-                {user.email || '已登录用户'}
-              </p>
-            </div>
-          </div>
-        ) : (
-          <div className="setup-card" style={{ textAlign: 'center', marginBottom: 24 }}>
-            <p style={{ color: 'var(--text-secondary)', marginBottom: 16 }}>
-              您还未登录，请先登录查看个人信息
-            </p>
-            <button className="btn btn-primary" onClick={() => navigate('/login')}>
-              前往登录
-            </button>
-          </div>
-        )}
-
-        <h3 style={{ marginBottom: 16, color: 'var(--text)' }}>学习统计</h3>
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-          gap: 16,
-          marginBottom: 24,
-        }}>
-          <div className="setup-card" style={{ textAlign: 'center', padding: '20px 16px' }}>
-            <div style={{ fontSize: 32, fontWeight: 700, color: 'var(--primary)', marginBottom: 4 }}>
-              {totalAnswered}
-            </div>
-            <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>总刷题数</div>
-          </div>
-
-          <div className="setup-card" style={{ textAlign: 'center', padding: '20px 16px' }}>
-            <div style={{ fontSize: 32, fontWeight: 700, color: 'var(--accent)', marginBottom: 4 }}>
-              {accuracy}%
-            </div>
-            <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>正确率</div>
-          </div>
-
-          <div className="setup-card" style={{ textAlign: 'center', padding: '20px 16px' }}>
-            <div style={{ fontSize: 32, fontWeight: 700, color: 'var(--danger)', marginBottom: 4 }}>
-              {wrongBookCount}
-            </div>
-            <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>错题本数量</div>
-          </div>
+      <div className="profile-card">
+        <div className="profile-avatar">
+          {user.email?.charAt(0).toUpperCase()}
         </div>
+        <h2>{user.email?.split('@')[0]}</h2>
+        <p className="profile-email">{user.email}</p>
+        <button className="btn btn-outline btn-sm" onClick={signOut}>
+          退出登录
+        </button>
+      </div>
 
-        {totalAnswered === 0 && (
-          <div style={{
-            textAlign: 'center',
-            color: 'var(--text-secondary)',
-            fontSize: 14,
-            padding: 24,
-            background: 'var(--card-bg)',
-            borderRadius: 'var(--radius)',
-          }}>
-            还没有刷题记录，快去首页开始练习吧！
+      {loading ? (
+        <div className="empty-state"><p>加载中...</p></div>
+      ) : (
+        <>
+          <div className="profile-stats">
+            <div className="profile-stat-card">
+              <div className="profile-stat-value">{stats?.total_exams || 0}</div>
+              <div className="profile-stat-label">考试次数</div>
+            </div>
+            <div className="profile-stat-card">
+              <div className="profile-stat-value">
+                {stats ? Math.round((stats.correct_answers / stats.total_questions) * 100) : 0}%
+              </div>
+              <div className="profile-stat-label">总正确率</div>
+            </div>
+            <div className="profile-stat-card">
+              <div className="profile-stat-value">{wrongCount}</div>
+              <div className="profile-stat-label">错题本</div>
+            </div>
           </div>
-        )}
+
+          <div className="result-categories">
+            <h3>📋 最近考试记录</h3>
+            {exams.length === 0 ? (
+              <p style={{color: 'var(--text-secondary)', fontSize: 13, textAlign: 'center', padding: 20}}>
+                还没有考试记录，去刷一套题吧！
+              </p>
+            ) : (
+              exams.map((e, i) => (
+                <div key={i} style={{
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  padding: '10px 0', borderBottom: '1px solid var(--border)'
+                }}>
+                  <div>
+                    <span style={{fontWeight: 600, fontSize: 14}}>
+                      {e.score}/{e.total}
+                    </span>
+                    <span style={{color: 'var(--text-secondary)', fontSize: 12, marginLeft: 8}}>
+                      {formatDate(e.created_at)}
+                    </span>
+                  </div>
+                  <div style={{display: 'flex', alignItems: 'center', gap: 12}}>
+                    <span style={{fontSize: 12, color: 'var(--text-secondary)'}}>
+                      {formatTime(e.time_used)}
+                    </span>
+                    <span style={{
+                      fontWeight: 700, fontSize: 14,
+                      color: e.percentage >= 75 ? 'var(--success)' : e.percentage >= 50 ? 'var(--warning)' : 'var(--danger)'
+                    }}>
+                      {e.percentage}%
+                    </span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </>
+      )}
+
+      <div style={{textAlign: 'center', padding: '10px 0'}}>
+        <button className="btn btn-primary" onClick={() => navigate('/exam')}>
+          开始新考试
+        </button>
       </div>
     </div>
   );

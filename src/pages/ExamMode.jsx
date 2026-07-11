@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import questions from '../data/questions';
 import { addWrongIds } from '../utils/storage';
+import { supabase } from '../utils/supabase';
 
 function shuffle(arr) {
   const a = [...arr];
@@ -116,10 +117,44 @@ export default function ExamMode() {
     };
   }, [answers, examQuestions]);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     clearInterval(timerRef.current);
     const result = calculateScore();
     const timeUsedSeconds = examTime * 60 - timeLeft;
+
+    // 保存到 Supabase（如果已登录）
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const detailForDB = result.details.map(d => ({
+          id: d.id, question: d.question, category: d.category,
+          type: d.type, userAnswer: d.userAnswer, isCorrect: d.isCorrect,
+        }));
+        await supabase.from('exam_results').insert({
+          user_id: user.id, score: result.score, total: result.total,
+          percentage: result.percentage, time_used: timeUsedSeconds,
+          details: detailForDB,
+        });
+        // 更新统计
+        const { data: stats } = await supabase.from('user_stats').select('*').eq('user_id', user.id).single();
+        if (stats) {
+          await supabase.from('user_stats').update({
+            total_exams: stats.total_exams + 1,
+            total_questions: stats.total_questions + result.total,
+            correct_answers: stats.correct_answers + result.score,
+            updated_at: new Date().toISOString(),
+          }).eq('user_id', user.id);
+        } else {
+          await supabase.from('user_stats').insert({
+            user_id: user.id, total_exams: 1,
+            total_questions: result.total, correct_answers: result.score,
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('保存成绩失败（离线/未登录）', e.message);
+    }
+
     navigate('/result', { state: { ...result, timeUsed: timeUsedSeconds } });
   };
 
