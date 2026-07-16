@@ -1,0 +1,89 @@
+<svg width="960" height="720" viewBox="0 0 960 720" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="shell" x1="318" y1="111" x2="710" y2="473" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#9CC7FF"/>
+      <stop offset=".45" stop-color="#4F8EF7"/>
+      <stop offset="1" stop-color="#1E3A8A"/>
+    </linearGradient>
+    <linearGradient id="edge" x1="266" y1="407" x2="723" y2="601" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#111827"/>
+      <stop offset=".5" stop-color="#6D28D9"/>
+      <stop offset="1" stop-color="#06B6D4"/>
+    </linearGradient>
+    <linearGradient id="pcb" x1="346" y1="248" x2="624" y2="507" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#34D399"/>
+      <stop offset="1" stop-color="#047857"/>
+    </linearGradient>
+    <filter id="shadow" x="140" y="38" width="680" height="642" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+      <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+      <feOffset dy="32"/>
+      <feGaussianBlur stdDeviation="28"/>
+      <feComposite in2="hardAlpha" operator="out"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0.02 0 0 0 0 0.04 0 0 0 0 0.11 0 0 0 0.38 0"/>
+      <feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_1_1"/>
+      <feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_1_1" result="shape"/>
+    </filter>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0H0V32" stroke="#93C5FD" stroke-opacity=".16" stroke-width="1"/>
+    </pattern>
+  </defs>
+  <rect width="960" height="720" fill="url(#grid)" opacity=".72"/>
+  <g opacity=".55" stroke="#BFDBFE" stroke-width="1.5">
+    <path d="M177 206H90"/>
+    <path d="M180 510H72"/>
+    <path d="M772 184H884"/>
+    <path d="M742 550H870"/>
+    <path d="M118 206V510"/>
+    <path d="M842 184V550"/>
+    <path d="M108 218L118 206L128 218"/>
+    <path d="M108 498L118 510L128 498"/>
+    <path d="M832 196L842 184L852 196"/>
+    <path d="M832 538L842 550L852 538"/>
+  </g>
+  <g opacity=".8">
+    <rect x="72" y="167" width="134" height="46" rx="8" fill="#0F172A" fill-opacity=".45" stroke="#60A5FA"/>
+    <text x="91" y="196" fill="#DBEAFE" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="700">DFM CHECK</text>
+    <rect x="724" y="150" width="134" height="46" rx="8" fill="#0F172A" fill-opacity=".45" stroke="#22D3EE"/>
+    <text x="743" y="179" fill="#CFFAFE" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="700">GD&amp;T</text>
+  </g>
+  <g filter="url(#shadow)">
+    <path d="M315 152C326 133 348 122 370 127L651 192C676 198 693 220 692 246L684 412C683 445 659 473 627 479L338 531C303 538 270 512 268 476L256 232C254 200 278 160 315 152Z" fill="#0B1220" fill-opacity=".9"/>
+    <path d="M319 135C331 116 353 106 375 111L656 176C681 182 698 204 697 230L689 396C688 429 664 457 632 463L343 515C308 522 275 496 273 460L261 216C259 184 282 144 319 135Z" fill="url(#shell)"/>
+    <path d="M331 156L640 228L632 382L350 434L340 238L331 156Z" fill="#0F172A" fill-opacity=".22"/>
+    <path d="M315 438L343 515L632 463L689 396L632 566L333 620L268 476L315 438Z" fill="url(#edge)"/>
+    <path d="M344 512L632 461" stroke="#E0F2FE" stroke-opacity=".45" stroke-width="2"/>
+    <path d="M333 620L632 566" stroke="#67E8F9" stroke-opacity=".55" stroke-width="2"/>
+    <path d="M261 216L340 238L350 434L315 438L273 460L261 216Z" fill="#172554" fill-opacity=".38"/>
+    <path d="M338 269L618 333L613 429L355 476L349 323L338 269Z" fill="url(#pcb)" stroke="#A7F3D0" stroke-width="2"/>
+    <g fill="#D1FAE5">
+      <rect x="384" y="333" width="56" height="42" rx="6" transform="rotate(12 384 333)"/>
+      <rect x="467" y="352" width="86" height="54" rx="7" transform="rotate(12 467 352)"/>
+      <rect x="389" y="401" width="42" height="30" rx="5" transform="rotate(12 389 401)"/>
+    </g>
+    <g stroke="#064E3B" stroke-opacity=".7" stroke-width="3">
+      <path d="M440 353L470 360"/>
+      <path d="M431 420L480 431"/>
+      <path d="M554 385L595 394"/>
+      <path d="M508 407L507 453"/>
+    </g>
+    <g fill="#F8FAFC">
+      <circle cx="362" cy="280" r="8"/>
+      <circle cx="618" cy="337" r="8"/>
+      <circle cx="610" cy="428" r="8"/>
+      <circle cx="356" cy="475" r="8"/>
+    </g>
+  </g>
+  <g stroke="#BAE6FD" stroke-width="2" stroke-linecap="round" opacity=".82">
+    <path d="M217 295L316 250"/>
+    <path d="M193 337L338 324"/>
+    <path d="M689 274L790 236"/>
+    <path d="M675 432L803 490"/>
+  </g>
+  <g fill="#DBEAFE" font-family="Inter, Arial, sans-serif" font-size="16" font-weight="700">
+    <text x="98" y="303">壁厚 2.0</text>
+    <text x="98" y="347">卡扣 / 止口</text>
+    <text x="792" y="239">PCB 堆叠</text>
+    <text x="807" y="497">螺丝柱校核</text>
+  </g>
+</svg>

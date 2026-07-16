@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import questions from '../data/questions';
 import { addWrongIds } from '../utils/storage';
+import { canUseExam, recordExamUse, getRemainingExam } from '../utils/guestLimit';
+import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../utils/supabase';
 
 function shuffle(arr) {
@@ -13,7 +15,7 @@ function shuffle(arr) {
   return a;
 }
 
-const countOptions = [10, 20, 30, 40, 0];
+const countOptions = [10, 20, 30, 40];
 const timeOptions = [
   { label: '10分钟', value: 10 },
   { label: '20分钟', value: 20 },
@@ -23,12 +25,14 @@ const timeOptions = [
 
 export default function ExamMode() {
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   // 配置
   const [questionCount, setQuestionCount] = useState(20);
   const [examTime, setExamTime] = useState(20); // 分钟
   const [started, setStarted] = useState(false);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
 
   // 考试题目（开始后生成）
   const [examQuestions, setExamQuestions] = useState([]);
@@ -38,6 +42,11 @@ export default function ExamMode() {
 
   // 随机抽题
   const handleStart = () => {
+    if (!user && !canUseExam()) {
+      setShowLoginPrompt(true);
+      return;
+    }
+    if (!user) recordExamUse();
     const pool = shuffle(questions);
     const limit = questionCount === 0 ? pool.length : Math.min(questionCount, pool.length);
     setExamQuestions(pool.slice(0, limit));
@@ -178,7 +187,7 @@ export default function ExamMode() {
           ← 返回首页
         </button>
         <div className="exam-intro">
-          <h2>⏱️ 模拟考试</h2>
+          <h2>模拟考试</h2>
 
           <div className="setup-card">
             <div className="setup-section">
@@ -225,6 +234,30 @@ export default function ExamMode() {
             <button className="btn btn-accent btn-large" onClick={handleStart}>
               开始考试
             </button>
+
+            {!user && (
+              <p className="setup-hint" style={{ marginTop: 16 }}>
+                未登录每日限 {getRemainingExam()} 次考试，
+                <button className="link-btn" onClick={() => navigate('/login')}>登录</button>后不限次数
+              </p>
+            )}
+
+            {showLoginPrompt && (
+              <div className="confirm-overlay">
+                <div className="confirm-dialog">
+                  <h3>今日次数已用完</h3>
+                  <p>考试模式每日限 1 次免费使用，登录后不限次数。</p>
+                  <div className="confirm-actions">
+                    <button className="btn btn-outline" onClick={() => { setShowLoginPrompt(false); navigate('/'); }}>
+                      返回首页
+                    </button>
+                    <button className="btn btn-primary" onClick={() => { setShowLoginPrompt(false); navigate('/login'); }}>
+                      去登录
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -237,7 +270,7 @@ export default function ExamMode() {
       {/* 顶部工具栏 */}
       <div className="exam-toolbar">
         <div className="exam-timer">
-          ⏱️ <span className={timeLeft < 300 ? 'timer-warning' : ''}>{formatTime(timeLeft)}</span>
+          剩余时间 <span className={timeLeft < 300 ? 'timer-warning' : ''}>{formatTime(timeLeft)}</span>
         </div>
         <div className="exam-progress-info">
           已答 {answeredCount}/{examQuestions.length}

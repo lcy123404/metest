@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import defaultQuestions from '../data/questions';
 import { useAuth } from '../contexts/AuthContext';
@@ -352,8 +352,35 @@ export default function AdminQuestions() {
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkText, setBulkText] = useState('');
   const [bulkError, setBulkError] = useState('');
+  const [query, setQuery] = useState('');
+  const [typeFilter, setTypeFilter] = useState('all');
+  const [difficultyFilter, setDifficultyFilter] = useState('all');
+  const [page, setPage] = useState(1);
 
   const allQuestions = [...defaultQuestions, ...customQuestions];
+  const pageSize = 30;
+  const filteredQuestions = useMemo(() => {
+    const keyword = query.trim().toLowerCase();
+    return allQuestions.filter((question) => {
+      if (typeFilter !== 'all' && question.type !== typeFilter) return false;
+      if (difficultyFilter !== 'all' && question.difficulty !== difficultyFilter) return false;
+      if (!keyword) return true;
+      return [question.id, question.question, question.category, question.knowledge_id]
+        .join(' ')
+        .toLowerCase()
+        .includes(keyword);
+    });
+  }, [allQuestions, query, typeFilter, difficultyFilter]);
+  const pageCount = Math.max(1, Math.ceil(filteredQuestions.length / pageSize));
+  const visibleQuestions = filteredQuestions.slice((page - 1) * pageSize, page * pageSize);
+
+  useEffect(() => {
+    setPage(1);
+  }, [query, typeFilter, difficultyFilter]);
+
+  useEffect(() => {
+    if (page > pageCount) setPage(pageCount);
+  }, [page, pageCount]);
 
   // Persist custom questions
   useEffect(() => {
@@ -540,9 +567,29 @@ export default function AdminQuestions() {
 
         {/* Questions table */}
         <div className="setup-card" style={{ overflowX: 'auto' }}>
-          <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 0 }}>
-            共 {allQuestions.length} 道题目（内置 {defaultQuestions.length} 道 + 自定义 {customQuestions.length} 道）
-          </p>
+          <div className="admin-question-toolbar">
+            <div>
+              <strong>{filteredQuestions.length}</strong>
+              <span> / {allQuestions.length} 道题目</span>
+            </div>
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="搜索题目、ID、分类或知识点"
+            />
+            <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}>
+              <option value="all">全部题型</option>
+              <option value="single">单选题</option>
+              <option value="multiple">多选题</option>
+              <option value="judge">判断题</option>
+            </select>
+            <select value={difficultyFilter} onChange={(event) => setDifficultyFilter(event.target.value)}>
+              <option value="all">全部难度</option>
+              <option value="easy">简单</option>
+              <option value="medium">中等</option>
+              <option value="hard">困难</option>
+            </select>
+          </div>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ borderBottom: '2px solid var(--border)' }}>
@@ -554,7 +601,7 @@ export default function AdminQuestions() {
               </tr>
             </thead>
             <tbody>
-              {allQuestions.map((q) => (
+              {visibleQuestions.map((q) => (
                 <QuestionRow
                   key={q.id}
                   q={q}
@@ -568,6 +615,11 @@ export default function AdminQuestions() {
               ))}
             </tbody>
           </table>
+          <div className="admin-pagination">
+            <span>第 {page} / {pageCount} 页</span>
+            <button disabled={page === 1} onClick={() => setPage((value) => value - 1)}>上一页</button>
+            <button disabled={page === pageCount} onClick={() => setPage((value) => value + 1)}>下一页</button>
+          </div>
         </div>
       </div>
     </div>

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import questions from '../data/questions';
 import { getWrongIds, removeWrongId, clearWrongBook } from '../utils/storage';
 import KnowledgePanel from '../components/KnowledgePanel';
+import { findKnowledgeArticle } from '../data/knowledge';
 
 export default function WrongBook() {
   const navigate = useNavigate();
@@ -24,10 +25,6 @@ export default function WrongBook() {
     setShowConfirm(false);
   };
 
-  const handleOpenReference = (url) => {
-    window.open(url, '_blank', 'noopener');
-  };
-
   if (wrongQuestions.length === 0) {
     return (
       <div className="wrong-book-page">
@@ -35,7 +32,7 @@ export default function WrongBook() {
           ← 返回首页
         </button>
         <div className="empty-state">
-          <div className="empty-icon">🎉</div>
+          <div className="empty-icon">0</div>
           <h3>错题本为空</h3>
           <p>暂时没有错题，继续保持！</p>
           <button className="btn btn-primary" onClick={() => navigate('/learn')}>
@@ -53,7 +50,7 @@ export default function WrongBook() {
           ← 返回首页
         </button>
         <div className="wrong-book-title">
-          <h2>📝 错题本</h2>
+          <h2>错题本</h2>
           <span className="wrong-count">{wrongQuestions.length} 道错题</span>
         </div>
         <button
@@ -89,6 +86,10 @@ export default function WrongBook() {
       <div className="wrong-book-list">
         {wrongQuestions.map((q, idx) => (
           <div key={q.id} className="wrong-question-card">
+            {(() => {
+              const article = findKnowledgeArticle(q.knowledge_id, q.category);
+              return (
+                <>
             <div className="wrong-question-header">
               <span className="question-number">{idx + 1}.</span>
               <span className={`difficulty-tag ${q.difficulty}`}>
@@ -115,15 +116,9 @@ export default function WrongBook() {
             </div>
 
             <div className="wrong-reference-row">
-              <a
-                className="reference-link"
-                href={q.reference_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => { e.preventDefault(); handleOpenReference(q.reference_url); }}
-              >
-                📚 {q.reference} →
-              </a>
+              <button className="reference-link reference-button" onClick={() => navigate(`/kb?topic=${article.id}`)}>
+                📚 跳转知识库：{article.title} →
+              </button>
               <button
                 className="btn btn-sm btn-outline"
                 onClick={() => handleRemove(q.id)}
@@ -133,8 +128,11 @@ export default function WrongBook() {
             </div>
 
             {q.knowledge_id && (
-              <KnowledgePanel knowledgeId={q.knowledge_id} />
+              <KnowledgePanel knowledgeId={q.knowledge_id} category={q.category} />
             )}
+                </>
+              );
+            })()}
           </div>
         ))}
       </div>

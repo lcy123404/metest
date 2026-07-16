@@ -1,8 +1,14 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Bookmark, Check, FilePenLine, LibraryBig } from 'lucide-react';
 import questions from '../data/questions';
-import { addWrongId } from '../utils/storage';
+import { addWrongId, getWrongIds } from '../utils/storage';
+import { canUseLearn, recordLearnUse, getRemainingLearn } from '../utils/guestLimit';
+import { isFavorite, toggleFavorite, getNote, setNote } from '../utils/favorites';
+import { useAuth } from '../contexts/AuthContext';
 import KnowledgePanel from '../components/KnowledgePanel';
+import { getLevel1Category } from '../utils/categories';
+import { recordPracticeAnswer } from '../utils/progress';
 
 // 洗牌函数
 function shuffle(arr) {
@@ -17,20 +23,71 @@ function shuffle(arr) {
 export default function LearnMode() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { user } = useAuth();
 
-  const categories = ['全部', ...new Set(questions.map((q) => q.category))];
-  const countOptions = [10, 20, 30, 40, 0]; // 0 = 全部
+  const practicePacks = [
+    {
+      id: 'all',
+      name: '全部题库',
+      desc: '不限制范围，适合完整拉练',
+      match: () => true,
+    },
+    {
+      id: 'foundation',
+      name: '基础入门',
+      desc: '塑胶结构、机械基础、材料性能',
+      match: (q) => ['plastic-mold', 'mech-basics', 'material-surface'].includes(getLevel1Category(q.category)),
+    },
+    {
+      id: 'process',
+      name: '工艺专项',
+      desc: '钣金、压铸、型材、CNC 与表面处理',
+      match: (q) => ['sheetmetal-diecast', 'material-surface'].includes(getLevel1Category(q.category)),
+    },
+    {
+      id: 'dfm',
+      name: '流程 DFM',
+      desc: 'NPI、DFM、试模、量产与工程文档',
+      match: (q) => getLevel1Category(q.category) === 'npi-process',
+    },
+    {
+      id: 'advanced',
+      name: '进阶冲刺',
+      desc: '公差、热设计、可靠性、DFMEA 等',
+      match: (q) => ['advanced-tech', 'industry-specific'].includes(getLevel1Category(q.category)) || q.category.includes('公差'),
+    },
+    {
+      id: 'hard',
+      name: '困难题',
+      desc: '只练 hard 难度，适合面试前压测',
+      match: (q) => q.difficulty === 'hard',
+    },
+  ];
+  const countOptions = [10, 30, 60, 100, 0]; // 0 = 全部
 
   // 状态
-  const [filter, setFilter] = useState('全部');
-  const [questionCount, setQuestionCount] = useState(20);
-  const [shuffled, setShuffled] = useState(false); // 是否随机
-  const [started, setStarted] = useState(false);
+  const initialPack = searchParams.get('pack') || 'all';
+  const initialCount = Number(searchParams.get('count')) || 30;
+  const requestedIds = useMemo(
+    () => (searchParams.get('ids') || '').split(',').map(Number).filter(Number.isFinite),
+    [searchParams]
+  );
+  const [filter, setFilter] = useState(initialPack);
+  const [questionCount, setQuestionCount] = useState([10, 30, 60, 100, 0].includes(initialCount) ? initialCount : 30);
+  const [shuffled, setShuffled] = useState(searchParams.get('shuffle') === '1'); // 是否随机
+  const [started, setStarted] = useState(searchParams.get('autostart') === '1');
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState(null);
   const [showResult, setShowResult] = useState(false);
   const [score, setScore] = useState({ correct: 0, total: 0 });
   const [showExitConfirm, setShowExitConfirm] = useState(false);
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+  const [, setFavKey] = useState(0);
+  const [noteOpen, setNoteOpen] = useState(false);
+  const [noteDraft, setNoteDraft] = useState('');
+  const [combo, setCombo] = useState(0);
+  const [maxCombo, setMaxCombo] = useState(0);
+  const [comboPopup, setComboPopup] = useState(''); // '', 'correct', 'great', 'perfect'
 
   // 错题本模式
   const fromWrong = searchParams.get('from') === 'wrong';
@@ -38,29 +95,48 @@ export default function LearnMode() {
   // 筛选题目
   const baseQuestions = useMemo(() => {
     let pool = questions;
-    if (fromWrong) {
+    if (requestedIds.length > 0) {
+      const byId = new Map(questions.map((question) => [question.id, question]));
+      pool = requestedIds.map((id) => byId.get(id)).filter(Boolean);
+    } else if (fromWrong) {
       // 从错题本进入：筛选错题
-      const { getWrongIds } = require('../utils/storage');
       const wrongIds = getWrongIds();
       pool = questions.filter((q) => wrongIds.includes(q.id));
-    } else if (filter !== '全部') {
-      pool = questions.filter((q) => q.category === filter);
+    } else {
+      const pack = practicePacks.find((item) => item.id === filter) || practicePacks[0];
+      pool = questions.filter(pack.match);
     }
     return pool;
-  }, [filter, fromWrong]);
+  }, [filter, fromWrong, requestedIds]);
 
   // 实际刷的题目（随机+限制数量）
   const quizQuestions = useMemo(() => {
     if (!started) return [];
     let pool = baseQuestions;
-    if (shuffled) pool = shuffle(pool);
+    if (shuffled && requestedIds.length === 0) pool = shuffle(pool);
     const limit = questionCount === 0 ? pool.length : Math.min(questionCount, pool.length);
     return pool.slice(0, limit);
-  }, [started, baseQuestions, shuffled, questionCount]);
+  }, [started, baseQuestions, shuffled, questionCount, requestedIds]);
 
   const totalQuestions = quizQuestions.length;
   const currentQuestion = quizQuestions[currentIndex];
   const progress = totalQuestions > 0 ? ((currentIndex + (showResult ? 1 : 0)) / totalQuestions) * 100 : 0;
+
+  useEffect(() => {
+    if (!started || !currentQuestion) return;
+    localStorage.setItem('structure_quiz_last_session', JSON.stringify({
+      pack: filter,
+      count: questionCount,
+      currentQuestionId: currentQuestion.id,
+      updatedAt: Date.now(),
+    }));
+  }, [started, currentQuestion, filter, questionCount]);
+
+  useEffect(() => {
+    if (!currentQuestion) return;
+    setNoteDraft(getNote(currentQuestion.id));
+    setNoteOpen(false);
+  }, [currentQuestion]);
 
   // 判断答案是否正确
   const checkCorrect = (q, ans) => {
@@ -77,6 +153,18 @@ export default function LearnMode() {
 
     const isCorrect = checkCorrect(currentQuestion, index);
     if (!isCorrect) addWrongId(currentQuestion.id);
+    recordPracticeAnswer(currentQuestion, isCorrect);
+
+    // 连击
+    if (isCorrect) {
+      const newCombo = combo + 1;
+      setCombo(newCombo);
+      setMaxCombo(prev => Math.max(prev, newCombo));
+      setComboPopup(newCombo >= 10 ? 'perfect' : newCombo >= 5 ? 'great' : 'correct');
+      setTimeout(() => setComboPopup(''), 1200);
+    } else {
+      setCombo(0);
+    }
 
     setScore((prev) => ({
       correct: prev.correct + (isCorrect ? 1 : 0),
@@ -99,6 +187,17 @@ export default function LearnMode() {
 
     const isCorrect = checkCorrect(currentQuestion, selectedAnswer);
     if (!isCorrect) addWrongId(currentQuestion.id);
+    recordPracticeAnswer(currentQuestion, isCorrect);
+
+    if (isCorrect) {
+      const newCombo = combo + 1;
+      setCombo(newCombo);
+      setMaxCombo(prev => Math.max(prev, newCombo));
+      setComboPopup(newCombo >= 10 ? 'perfect' : newCombo >= 5 ? 'great' : 'correct');
+      setTimeout(() => setComboPopup(''), 1200);
+    } else {
+      setCombo(0);
+    }
 
     setScore((prev) => ({
       correct: prev.correct + (isCorrect ? 1 : 0),
@@ -122,10 +221,15 @@ export default function LearnMode() {
     }
   };
 
-  const handleStart = () => setStarted(true);
-
-  const handleOpenReference = (url) => {
-    window.open(url, '_blank', 'noopener');
+  const handleStart = () => {
+    if (!user && !canUseLearn()) {
+      setShowLoginPrompt(true);
+      return;
+    }
+    if (!user) recordLearnUse();
+    setCombo(0);
+    setMaxCombo(0);
+    setStarted(true);
   };
 
   const isAnswerCorrect = (optionIndex) => {
@@ -163,24 +267,35 @@ export default function LearnMode() {
         <button className="btn btn-back" onClick={() => navigate('/')}>
           ← 返回首页
         </button>
-        <div className="setup-card">
-          <h2>📖 {fromWrong ? '错题复习' : '学习模式'}设置</h2>
+        <div className="setup-card learn-setup-redesign">
+          <div className="setup-hero">
+            <span className="setup-kicker">{fromWrong ? 'Review' : 'Practice'}</span>
+            <h2>{fromWrong ? '错题复盘' : '配置一次专注刷题'}</h2>
+            <p>
+              选择一个训练目标和本轮题量。完成后可按错题和知识点继续复盘。
+            </p>
+          </div>
 
           {!fromWrong && (
             <div className="setup-section">
-              <label className="setup-label">题目分类</label>
-              <div className="category-filter">
-                {categories.map((cat) => (
+              <label className="setup-label">选择训练包</label>
+              <div className="category-filter pack-filter">
+                {practicePacks.map((pack) => {
+                  const count = questions.filter(pack.match).length;
+                  return (
                   <button
-                    key={cat}
-                    className={`filter-btn ${filter === cat ? 'active' : ''}`}
-                    onClick={() => setFilter(cat)}
+                    key={pack.id}
+                    className={`filter-btn ${filter === pack.id ? 'active' : ''}`}
+                    onClick={() => setFilter(pack.id)}
                   >
-                    {cat}
+                    <strong>{pack.name}</strong>
+                    <small>{pack.desc}</small>
+                    <em>{count} 题</em>
                   </button>
-                ))}
+                  );
+                })}
               </div>
-              <p className="setup-hint">当前分类共 {baseQuestions.length} 道题</p>
+              <p className="setup-hint">训练包按面试能力组织，具体知识点会在答题解析中展示。</p>
             </div>
           )}
 
@@ -224,6 +339,30 @@ export default function LearnMode() {
           >
             {baseQuestions.length === 0 ? '暂无题目' : '开始学习'}
           </button>
+
+          {!user && (
+            <p className="setup-hint">
+              未登录每日限 {getRemainingLearn()} 次学习，
+              <button className="link-btn" onClick={() => navigate('/login')}>登录</button>后不限次数
+            </p>
+          )}
+
+          {showLoginPrompt && (
+            <div className="confirm-overlay">
+              <div className="confirm-dialog">
+                <h3>今日次数已用完</h3>
+                <p>学习模式每日限 2 次免费使用，登录后不限次数。</p>
+                <div className="confirm-actions">
+                  <button className="btn btn-outline" onClick={() => { setShowLoginPrompt(false); navigate('/'); }}>
+                    返回首页
+                  </button>
+                  <button className="btn btn-primary" onClick={() => { setShowLoginPrompt(false); navigate('/login'); }}>
+                    去登录
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -272,6 +411,14 @@ export default function LearnMode() {
         </div>
       )}
 
+      {/* 连击显示 */}
+      {combo > 1 && (
+        <div className="combo-bar">
+          <span className="combo-count">{combo}</span>
+          <span className="combo-label">连击</span>
+        </div>
+      )}
+
       {/* 进度条 */}
       <div className="progress-bar-wrapper">
         <div className="progress-bar">
@@ -308,7 +455,7 @@ export default function LearnMode() {
                   disabled={showResult}
                 >
                   <span className="option-label">A</span>
-                  <span className="option-text">正确 ✓</span>
+                  <span className="option-text">正确</span>
                 </button>
                 <button
                   className={getOptionClass(1)}
@@ -316,7 +463,7 @@ export default function LearnMode() {
                   disabled={showResult}
                 >
                   <span className="option-label">B</span>
-                  <span className="option-text">错误 ✗</span>
+                  <span className="option-text">错误</span>
                 </button>
               </>
             ) : (
@@ -355,9 +502,9 @@ export default function LearnMode() {
             }`}>
               <div className="feedback-header">
                 {checkCorrect(currentQuestion, currentQuestion.type === 'multiple' ? selectedAnswer : selectedAnswer) ? (
-                  <span className="feedback-icon">🎉 回答正确！</span>
+                  <span className="feedback-icon">回答正确</span>
                 ) : (
-                  <span className="feedback-icon">❌ 回答错误（已加入错题本）</span>
+                  <span className="feedback-icon">回答错误，已加入错题本</span>
                 )}
               </div>
               <div className="feedback-correct-answer">
@@ -365,28 +512,50 @@ export default function LearnMode() {
                 {currentQuestion.type === 'multiple'
                   ? currentQuestion.answer.map((i) => String.fromCharCode(65 + i)).join('、')
                   : currentQuestion.type === 'judge'
-                    ? (currentQuestion.answer === 0 ? '正确 ✓' : '错误 ✗')
+                    ? (currentQuestion.answer === 0 ? '正确' : '错误')
                     : String.fromCharCode(65 + currentQuestion.answer) + '. ' + currentQuestion.options[currentQuestion.answer]}
               </div>
               <div className="feedback-explanation">
                 <strong>解析：</strong>
                 {currentQuestion.explanation}
               </div>
-              <div className="feedback-reference">
-                <a
-                  className="reference-link"
-                  href={currentQuestion.reference_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(e) => { e.preventDefault(); handleOpenReference(currentQuestion.reference_url); }}
+
+              <div className="answer-tools">
+                <button
+                  className={`answer-tool-button ${isFavorite(currentQuestion.id) ? 'active' : ''}`}
+                  onClick={() => { toggleFavorite(currentQuestion.id); setFavKey(f => f + 1); }}
                 >
-                  📚 {currentQuestion.reference} →
-                </a>
+                  <Bookmark size={15} />
+                  {isFavorite(currentQuestion.id) ? '已收藏' : '收藏题目'}
+                </button>
+                <button
+                  className={`answer-tool-button ${getNote(currentQuestion.id) ? 'active note' : ''}`}
+                  onClick={() => setNoteOpen((value) => !value)}
+                >
+                  <FilePenLine size={15} />
+                  {getNote(currentQuestion.id) ? '编辑笔记' : '记录思路'}
+                </button>
+                <button className="answer-tool-button" onClick={() => navigate('/notes')}><LibraryBig size={15} />全部笔记</button>
+              </div>
+
+              {noteOpen && (
+                <div className="inline-note-editor">
+                  <div><strong>这道题的判断依据</strong><span>支持 Markdown，建议记录原因、风险和量产验证方法。</span></div>
+                  <textarea value={noteDraft} onChange={(event) => setNoteDraft(event.target.value)} placeholder="例如：卡扣根部需要圆角过渡，原因是..." />
+                  <div className="inline-note-actions">
+                    <button className="button secondary" onClick={() => { setNoteDraft(getNote(currentQuestion.id)); setNoteOpen(false); }}>取消</button>
+                    <button className="button primary" onClick={() => { setNote(currentQuestion.id, noteDraft); setFavKey((value) => value + 1); setNoteOpen(false); }}><Check size={15} />保存笔记</button>
+                  </div>
+                </div>
+              )}
+
+              <div className="feedback-reference">
+                <span className="reference-text">{currentQuestion.reference}</span>
               </div>
 
               {/* 知识文章深入展开 */}
               {currentQuestion.knowledge_id && (
-                <KnowledgePanel knowledgeId={currentQuestion.knowledge_id} />
+                <KnowledgePanel knowledgeId={currentQuestion.knowledge_id} category={currentQuestion.category} />
               )}
             </div>
           )}
@@ -405,8 +574,16 @@ export default function LearnMode() {
                 下一题 →
               </button>
             ) : showResult ? (
-              <div className="complete-msg">
-                ✅ 全部完成！正确率 {Math.round((score.correct / score.total) * 100)}%
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                <div className="rating-display">
+                  {(() => {
+                    const pct = Math.round((score.correct / score.total) * 100);
+                    const level = pct >= 95 ? 'SSS' : pct >= 85 ? 'SS' : pct >= 70 ? 'S' : pct >= 55 ? 'A' : pct >= 40 ? 'B' : 'C';
+                    const color = pct >= 85 ? '#10B981' : pct >= 70 ? '#3B82F6' : pct >= 40 ? '#F59E0B' : '#EF4444';
+                    return <><span className="rating-badge" style={{ background: color }}>{level}</span>
+                    <span className="rating-detail">{score.correct}/{score.total} · {maxCombo}连击</span></>;
+                  })()}
+                </div>
               </div>
             ) : null}
           </div>

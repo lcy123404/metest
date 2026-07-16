@@ -3,8 +3,13 @@ import { supabase } from '../utils/supabase';
 
 const AuthContext = createContext(null);
 
+const DEMO_USER = {
+  id: 'demo-user-local',
+  email: 'demo@structure-quiz.local',
+};
+
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(DEMO_USER);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -14,7 +19,7 @@ export function AuthProvider({ children }) {
     supabase.auth.getSession()
       .then(({ data: { session } }) => {
         if (!cancelled) {
-          setUser(session?.user ?? null);
+          setUser(session?.user ?? DEMO_USER);
           setLoading(false);
         }
       })
@@ -27,7 +32,7 @@ export function AuthProvider({ children }) {
       });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
+      setUser(session?.user ?? DEMO_USER);
     });
 
     return () => {
@@ -50,7 +55,7 @@ export function AuthProvider({ children }) {
 
   const signOut = async () => {
     await supabase.auth.signOut();
-    setUser(null);
+    setUser(DEMO_USER);
   };
 
   return (

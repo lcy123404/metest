@@ -1,5 +1,6 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import KnowledgePanel from '../components/KnowledgePanel';
+import { findKnowledgeArticle } from '../data/knowledge';
 
 export default function Result() {
   const location = useLocation();
@@ -35,10 +36,6 @@ export default function Result() {
   };
 
   const gradeInfo = getGradeInfo(percentage);
-
-  const handleOpenReference = (url) => {
-    window.open(url, '_blank', 'noopener');
-  };
 
   // 分类统计
   const categoryStats = {};
@@ -85,7 +82,7 @@ export default function Result() {
             </div>
           </div>
           <p className="result-wrong-hint">
-            错题已自动加入错题本 📝
+            错题已自动加入错题本
           </p>
         </div>
       </div>
@@ -119,12 +116,16 @@ export default function Result() {
 
       {/* 错题回顾 */}
       <div className="result-details">
-        <h3>📝 答题详情（错题已入错题本）</h3>
+        <h3>答题详情</h3>
         {details.map((d, idx) => (
           <div key={d.id} className={`result-question ${d.isCorrect ? 'correct-bg' : 'wrong-bg'}`}>
+            {(() => {
+              const article = findKnowledgeArticle(d.knowledge_id, d.category);
+              return (
+                <>
             <div className="result-question-header">
               <span className="question-number">
-                {idx + 1}. {d.isCorrect ? '✅' : '❌'}
+                {idx + 1}. {d.isCorrect ? '正确' : '错误'}
               </span>
               <span className={`difficulty-tag ${d.difficulty}`}>
                 {d.difficulty === 'easy' ? '简单' : d.difficulty === 'medium' ? '中等' : '困难'}
@@ -165,23 +166,20 @@ export default function Result() {
                   {d.explanation}
                 </div>
                 <div className="result-reference">
-                  <a
-                    className="reference-link"
-                    href={d.reference_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(e) => { e.preventDefault(); handleOpenReference(d.reference_url); }}
-                  >
-                    📚 {d.reference} →
-                  </a>
+                  <button className="reference-link reference-button" onClick={() => navigate(`/kb?topic=${article.id}`)}>
+                    📚 跳转知识库：{article.title} →
+                  </button>
                 </div>
 
                 {/* 知识文章深入展开 */}
                 {d.knowledge_id && (
-                  <KnowledgePanel knowledgeId={d.knowledge_id} />
+                  <KnowledgePanel knowledgeId={d.knowledge_id} category={d.category} />
                 )}
               </>
             )}
+                </>
+              );
+            })()}
           </div>
         ))}
       </div>
