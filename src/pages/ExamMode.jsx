@@ -15,7 +15,7 @@ function shuffle(arr) {
   return a;
 }
 
-const countOptions = [10, 20, 30, 40];
+const countOptions = [10, 20, 30, 40, 0];
 const timeOptions = [
   { label: '10分钟', value: 10 },
   { label: '20分钟', value: 20 },

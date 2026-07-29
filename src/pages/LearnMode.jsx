@@ -88,6 +88,8 @@ export default function LearnMode() {
   const [combo, setCombo] = useState(0);
   const [maxCombo, setMaxCombo] = useState(0);
   const [comboPopup, setComboPopup] = useState(''); // '', 'correct', 'great', 'perfect'
+  // 答题历史：记录每道题的作答和反馈状态，返回上一题时恢复
+  const [answerHistory, setAnswerHistory] = useState({});
 
   // 错题本模式
   const fromWrong = searchParams.get('from') === 'wrong';
@@ -105,6 +107,10 @@ export default function LearnMode() {
     } else {
       const pack = practicePacks.find((item) => item.id === filter) || practicePacks[0];
       pool = questions.filter(pack.match);
+    }
+    // 保护：如果筛选结果为空但请求了全部，回退到全部题目
+    if (pool.length === 0 && !fromWrong && requestedIds.length === 0) {
+      pool = questions;
     }
     return pool;
   }, [filter, fromWrong, requestedIds]);
@@ -134,9 +140,18 @@ export default function LearnMode() {
 
   useEffect(() => {
     if (!currentQuestion) return;
+    // 恢复该题的历史作答状态
+    const history = answerHistory[currentQuestion.id];
+    if (history) {
+      setSelectedAnswer(history.selectedAnswer);
+      setShowResult(history.showResult);
+    } else {
+      setSelectedAnswer(null);
+      setShowResult(false);
+    }
     setNoteDraft(getNote(currentQuestion.id));
     setNoteOpen(false);
-  }, [currentQuestion]);
+  }, [currentQuestion, answerHistory]);
 
   // 判断答案是否正确
   const checkCorrect = (q, ans) => {
@@ -154,6 +169,9 @@ export default function LearnMode() {
     const isCorrect = checkCorrect(currentQuestion, index);
     if (!isCorrect) addWrongId(currentQuestion.id);
     recordPracticeAnswer(currentQuestion, isCorrect);
+
+    // 保存答题历史
+    setAnswerHistory(prev => ({ ...prev, [currentQuestion.id]: { selectedAnswer: index, showResult: true } }));
 
     // 连击
     if (isCorrect) {
@@ -189,6 +207,9 @@ export default function LearnMode() {
     if (!isCorrect) addWrongId(currentQuestion.id);
     recordPracticeAnswer(currentQuestion, isCorrect);
 
+    // 保存答题历史
+    setAnswerHistory(prev => ({ ...prev, [currentQuestion.id]: { selectedAnswer: [...selectedAnswer], showResult: true } }));
+
     if (isCorrect) {
       const newCombo = combo + 1;
       setCombo(newCombo);
@@ -208,16 +229,12 @@ export default function LearnMode() {
   const handleNext = () => {
     if (currentIndex < totalQuestions - 1) {
       setCurrentIndex(currentIndex + 1);
-      setSelectedAnswer(null);
-      setShowResult(false);
     }
   };
 
   const handlePrev = () => {
     if (currentIndex > 0) {
       setCurrentIndex(currentIndex - 1);
-      setSelectedAnswer(null);
-      setShowResult(false);
     }
   };
 

@@ -249,12 +249,15 @@ export default function KnowledgeBase() {
             </div>
             <div className="wiki-question-list">
               {filteredQuestions.slice(0, showMorePoints || pointQuery ? 40 : 8).map((question, index) => (
-                <button key={question.id} onClick={() => setSearchParams({ topic: activePage.id, point: question.knowledge_id || `question-${question.id}` })}>
+                <button key={question.id} onClick={() => navigate(`/learn?ids=${question.id}&autostart=1`)}>
                   <span>{index + 1}</span><strong>{question.question}</strong><small>{question.difficulty === 'hard' ? '困难' : question.difficulty === 'medium' ? '中等' : '基础'}</small>
                 </button>
               ))}
             </div>
-            {!pointQuery && filteredQuestions.length > 8 && <button className="wiki-more" onClick={() => setShowMorePoints((value) => !value)}>{showMorePoints ? '收起' : `查看全部 ${filteredQuestions.length} 道题`}</button>}
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 12 }}>
+              {!pointQuery && filteredQuestions.length > 8 && <button className="wiki-more" onClick={() => setShowMorePoints((value) => !value)}>{showMorePoints ? '收起' : `查看全部 ${filteredQuestions.length} 道题`}</button>}
+              <button className="btn btn-primary" onClick={() => navigate(`/learn?ids=${pageQuestions.map(q => q.id).join(',')}&autostart=1`)}>练习本页全部 {pageQuestions.length} 题 →</button>
+            </div>
           </section>}
         </main>
       </div>
